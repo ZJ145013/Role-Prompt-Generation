@@ -1,18 +1,14 @@
 services:
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/zj145013/role-prompt-generation-frontend:main
     ports:
-      - "3000:80"
+      - "8184:80"
     depends_on:
       - backend
     restart: unless-stopped
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ghcr.io/zj145013/role-prompt-generation-backend:main
     ports:
-      - "8000:8000"
+      - "8186:8000"
     restart: unless-stopped

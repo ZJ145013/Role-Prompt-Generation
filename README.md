@@ -32,15 +32,31 @@ npm run dev
 
 ### Docker 部署
 
+**方式一：Docker Compose（推荐）**
+
+```bash
+# 下载 docker-compose.yml
+curl -O https://raw.githubusercontent.com/ZJ145013/Role-Prompt-Generation/main/docker-compose.yml
+
+# 启动服务
+docker-compose up -d
+```
+
+**方式二：手动运行**
+
 ```bash
 # 拉取镜像
-docker pull ghcr.io/<username>/role-prompt-generation-backend:main
-docker pull ghcr.io/<username>/role-prompt-generation-frontend:main
+docker pull ghcr.io/zj145013/role-prompt-generation-backend:main
+docker pull ghcr.io/zj145013/role-prompt-generation-frontend:main
 
 # 运行
-docker run -d -p 8000:8000 ghcr.io/<username>/role-prompt-generation-backend:main
-docker run -d -p 80:80 ghcr.io/<username>/role-prompt-generation-frontend:main
+docker run -d -p 8186:8000 ghcr.io/zj145013/role-prompt-generation-backend:main
+docker run -d -p 8184:80 ghcr.io/zj145013/role-prompt-generation-frontend:main
 ```
+
+部署完成后访问：
+- 前端：http://localhost:8184
+- 后端 API：http://localhost:8186
 
 ## API
 
