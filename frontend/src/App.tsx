@@ -55,22 +55,43 @@ interface SettingsModalProps {
   onSave: (s: AppSettings) => void
 }
 
+type ProviderConfig = { apiKey: string; baseUrl: string; model: string }
+
 function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsModalProps) {
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings)
+  const [providerConfigs, setProviderConfigs] = useState<Record<Provider, ProviderConfig>>(() => {
+    const saved = localStorage.getItem('rpg_provider_configs')
+    if (saved) {
+      try { return JSON.parse(saved) } catch {}
+    }
+    return PROVIDER_OPTIONS.reduce((acc, p) => {
+      acc[p.value] = { apiKey: '', baseUrl: '', model: p.defaultModel }
+      return acc
+    }, {} as Record<Provider, ProviderConfig>)
+  })
 
   useEffect(() => {
-    if (isOpen) setLocalSettings(settings)
+    if (isOpen) {
+      setLocalSettings(settings)
+      setProviderConfigs(prev => ({
+        ...prev,
+        [settings.provider]: { apiKey: settings.apiKey, baseUrl: settings.baseUrl, model: settings.model }
+      }))
+    }
   }, [isOpen, settings])
 
   const handleChange = (field: keyof AppSettings, value: string) => {
-    setLocalSettings(prev => {
-      const newSettings = { ...prev, [field]: value }
-      if (field === 'provider') {
-        const providerConfig = PROVIDER_OPTIONS.find(p => p.value === value)
-        if (providerConfig) newSettings.model = providerConfig.defaultModel
-      }
-      return newSettings
-    })
+    if (field === 'provider') {
+      setProviderConfigs(prev => {
+        const updated = { ...prev, [localSettings.provider]: { apiKey: localSettings.apiKey, baseUrl: localSettings.baseUrl, model: localSettings.model } }
+        localStorage.setItem('rpg_provider_configs', JSON.stringify(updated))
+        return updated
+      })
+      const targetConfig = providerConfigs[value as Provider]
+      setLocalSettings({ provider: value as Provider, ...targetConfig })
+    } else {
+      setLocalSettings(prev => ({ ...prev, [field]: value }))
+    }
   }
 
   const currentProvider = PROVIDER_OPTIONS.find(p => p.value === localSettings.provider)
