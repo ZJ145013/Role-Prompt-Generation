@@ -140,8 +140,12 @@ def _generate_with_claude(req: GenerateRequest) -> str:
     }
     with httpx.Client(timeout=120) as client:
         response = client.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-        data = response.json()
+        if response.status_code != 200:
+            raise Exception(f"Claude API 错误 (HTTP {response.status_code}): {response.text[:500]}")
+        try:
+            data = response.json()
+        except Exception:
+            raise Exception(f"Claude API 返回无效响应: {response.text[:500]}")
         return data["content"][0]["text"] if data.get("content") else ""
 
 
