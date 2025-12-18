@@ -133,6 +133,7 @@ def _generate_with_claude(req: GenerateRequest) -> str:
     payload = {
         "model": req.model,
         "max_tokens": 4096,
+        "stream": False,
         "system": SYSTEM_PROMPT,
         "messages": [
             {"role": "user", "content": f"请为以下角色生成专业的提示词：{req.role_input}"},
