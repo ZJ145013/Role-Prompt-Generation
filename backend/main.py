@@ -123,6 +123,7 @@ def _generate_with_openai(req: GenerateRequest) -> str:
 
 
 def _generate_with_claude(req: GenerateRequest) -> str:
+    import json
     base_url = req.base_url.rstrip('/') if req.base_url else "https://api.anthropic.com"
     url = f"{base_url}/v1/messages"
     headers = {
@@ -143,11 +144,28 @@ def _generate_with_claude(req: GenerateRequest) -> str:
         response = client.post(url, headers=headers, json=payload)
         if response.status_code != 200:
             raise Exception(f"Claude API 错误 (HTTP {response.status_code}): {response.text[:500]}")
+        text = response.text
+        # 尝试解析为 JSON（非流式响应）
         try:
-            data = response.json()
-        except Exception:
-            raise Exception(f"Claude API 返回无效响应: {response.text[:500]}")
-        return data["content"][0]["text"] if data.get("content") else ""
+            data = json.loads(text)
+            return data["content"][0]["text"] if data.get("content") else ""
+        except json.JSONDecodeError:
+            pass
+        # 解析 SSE 流式响应
+        result_text = []
+        for line in text.split('\n'):
+            if line.startswith('data: ') and not line.startswith('data: [DONE]'):
+                try:
+                    data = json.loads(line[6:])
+                    if data.get("type") == "content_block_delta":
+                        delta = data.get("delta", {})
+                        if delta.get("type") == "text_delta":
+                            result_text.append(delta.get("text", ""))
+                except json.JSONDecodeError:
+                    continue
+        if result_text:
+            return "".join(result_text)
+        raise Exception(f"Claude API 返回无效响应: {text[:500]}")
 
 
 def _generate_with_gemini(req: GenerateRequest) -> str:
