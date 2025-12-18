@@ -184,11 +184,16 @@ async def generate_prompt(req: GenerateRequest):
         raise HTTPException(status_code=502, detail=f"Claude 服务错误: {e.message}")
     except Exception as e:
         error_type = type(e).__name__
-        if "authentication" in str(e).lower() or "api key" in str(e).lower():
-            raise HTTPException(status_code=401, detail="API Key 无效或已过期")
-        if "rate" in str(e).lower() or "quota" in str(e).lower():
-            raise HTTPException(status_code=429, detail="请求频率超限，请稍后重试")
-        raise HTTPException(status_code=500, detail=f"生成失败 ({error_type})")
+        error_msg = str(e)
+
+        if "authentication" in error_msg.lower() or "api key" in error_msg.lower() or "401" in error_msg:
+            raise HTTPException(status_code=401, detail=f"API Key 无效或已过期 ({error_type})")
+        if "rate" in error_msg.lower() or "quota" in error_msg.lower() or "429" in error_msg:
+            raise HTTPException(status_code=429, detail=f"请求频率超限，请稍后重试 ({error_type})")
+        if "timeout" in error_msg.lower():
+            raise HTTPException(status_code=504, detail=f"请求超时，请重试 ({error_type})")
+
+        raise HTTPException(status_code=500, detail=f"生成失败: {error_msg} ({error_type})")
 
 
 @app.get("/api/health")
