@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
+import httpx
 import openai
 import anthropic
 from google import genai
@@ -122,31 +123,43 @@ def _generate_with_openai(req: GenerateRequest) -> str:
 
 
 def _generate_with_claude(req: GenerateRequest) -> str:
-    client = anthropic.Anthropic(
-        api_key=req.api_key,
-        base_url=req.base_url if req.base_url else None,
-    )
-    response = client.messages.create(
-        model=req.model,
-        max_tokens=4096,
-        system=SYSTEM_PROMPT,
-        messages=[
+    base_url = req.base_url.rstrip('/') if req.base_url else "https://api.anthropic.com"
+    url = f"{base_url}/v1/messages"
+    headers = {
+        "x-api-key": req.api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json; charset=utf-8",
+    }
+    payload = {
+        "model": req.model,
+        "max_tokens": 4096,
+        "system": SYSTEM_PROMPT,
+        "messages": [
             {"role": "user", "content": f"请为以下角色生成专业的提示词：{req.role_input}"},
         ],
-    )
-    return response.content[0].text if response.content else ""
+    }
+    with httpx.Client(timeout=120) as client:
+        response = client.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        return data["content"][0]["text"] if data.get("content") else ""
 
 
 def _generate_with_gemini(req: GenerateRequest) -> str:
-    http_options = None
-    if req.base_url:
-        http_options = genai.types.HttpOptions(base_url=req.base_url)
-    client = genai.Client(api_key=req.api_key, http_options=http_options)
-    response = client.models.generate_content(
-        model=req.model,
-        contents=f"{SYSTEM_PROMPT}\n\n请为以下角色生成专业的提示词：{req.role_input}",
-    )
-    return response.text or ""
+    try:
+        http_options = None
+        if req.base_url:
+            http_options = genai.types.HttpOptions(base_url=req.base_url)
+        client = genai.Client(api_key=req.api_key, http_options=http_options)
+        response = client.models.generate_content(
+            model=req.model,
+            contents=f"{SYSTEM_PROMPT}\n\n请为以下角色生成专业的提示词：{req.role_input}",
+        )
+        return response.text or ""
+    except Exception as e:
+        error_msg = str(e)
+        error_type = type(e).__name__
+        raise Exception(f"Gemini API 调用失败: {error_msg} ({error_type})")
 
 
 @app.post("/api/generate", response_model=GenerateResponse)
@@ -176,12 +189,13 @@ async def generate_prompt(req: GenerateRequest):
         raise HTTPException(status_code=429, detail="OpenAI 请求频率超限，请稍后重试")
     except openai.APIError as e:
         raise HTTPException(status_code=502, detail=f"OpenAI 服务错误: {e.message}")
-    except anthropic.AuthenticationError:
-        raise HTTPException(status_code=401, detail="Claude API Key 无效")
-    except anthropic.RateLimitError:
-        raise HTTPException(status_code=429, detail="Claude 请求频率超限，请稍后重试")
-    except anthropic.APIError as e:
-        raise HTTPException(status_code=502, detail=f"Claude 服务错误: {e.message}")
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status == 401:
+            raise HTTPException(status_code=401, detail="Claude API Key 无效")
+        if status == 429:
+            raise HTTPException(status_code=429, detail="Claude 请求频率超限，请稍后重试")
+        raise HTTPException(status_code=502, detail=f"Claude 服务错误: {e.response.text}")
     except Exception as e:
         error_type = type(e).__name__
         error_msg = str(e)
